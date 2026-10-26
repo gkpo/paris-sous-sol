@@ -1292,6 +1292,17 @@ tlist.addEventListener('click',e=>{ const b=e.target.closest('.trow'); if(!b) re
 setInterval(()=>{ if(!tlist.hidden && performance.now()-listTouch>2500) renderList(); },3000);   // don't rebuild under a finger
 const hhmm=ms=>new Date(ms).toLocaleTimeString('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 let lastFeed=0;
+// count only trains inside the model area (drawn on the last frame); rechecked every few seconds,
+// since the first update can land before the scene has drawn a single frame
+let lastStale=null;
+function updateCount(force){
+  if(!(liveEl.dataset.state==='live'||liveEl.dataset.state==='stale')) return;
+  const inArea=plans.filter(T=>T.drawn===frameNo), lines=new Set(inArea.map(T=>T.l)).size;
+  const text=`${inArea.length} trains sur ${lines} lignes · mis à jour à ${hhmm(lastFeed).slice(0,5)}${lastStale?' (flux momentanément injoignable)':''}`;
+  if(!force && text===liveText.textContent) return;
+  liveText.textContent=text; refreshListAffordance(); renderList();
+}
+setInterval(()=>{ if(plans.length && !document.hidden) updateCount(false); },3000);
 function ingest(p){
   if(!p || !Array.isArray(p.trains)){ setLive('err','Le flux en direct a renvoyé une réponse illisible.'); return; }
   // One journey ID can bundle predictions from several physical trains, so split each into
@@ -1324,10 +1335,7 @@ function ingest(p){
       for(const T of list){ const k=T._k;
         if(kept.some(A=>Math.hypot(A._k.x-k.x,A._k.z-k.z)<300 && A._k.hx*k.hx+A._k.hz*k.hz>0.5)) T.dup=true; else kept.push(T); } }
   }
-  setTimeout(()=>{   // count only trains inside the model area (drawn on the last frame)
-    const inArea=plans.filter(T=>T.drawn===frameNo), lines=new Set(inArea.map(T=>T.l)).size;
-    if(liveEl.dataset.state==='live'||liveEl.dataset.state==='stale') liveText.textContent=`${inArea.length} trains sur ${lines} lignes · mis à jour à ${hhmm(lastFeed).slice(0,5)}${p.stale?' (flux momentanément injoignable)':''}`;
-    refreshListAffordance(); renderList(); },120);
+  lastStale=p.stale; setTimeout(()=>updateCount(true),120);
   if(prev){ // keep following the same physical train across updates
     const nowS=Date.now()/1000; let best=null, bd=600;
     for(const T of plans){ if(T.l!==prev.l || T.dup) continue; const st=stateAt(T,nowS); if(!st) continue;
