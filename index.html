@@ -11,14 +11,14 @@
 <meta property="og:url" content="https://paris-sous-sol.vercel.app/">
 <meta property="og:site_name" content="Paris Sous-Sol">
 <meta property="og:locale" content="fr_FR">
-<meta property="og:image" content="https://paris-sous-sol.vercel.app/og.jpg?v=2">
+<meta property="og:image" content="https://paris-sous-sol.vercel.app/og.jpg?v=3">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Les lignes de métro qui se croisent sous Opéra et Chaussée d’Antin, en 3D, avec le titre Paris Sous-Sol">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Paris Sous-Sol">
 <meta name="twitter:description" content="Le métro et le RER de Paris en 3D, à l’échelle réelle, avec les trains en direct.">
-<meta name="twitter:image" content="https://paris-sous-sol.vercel.app/og.jpg?v=2">
+<meta name="twitter:image" content="https://paris-sous-sol.vercel.app/og.jpg?v=3">
 <link rel="canonical" href="https://paris-sous-sol.vercel.app/">
 <meta name="theme-color" content="#0b0f17">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0f17'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' text-anchor='middle' fill='%23f2c94c'%3EM%3C/text%3E%3C/svg%3E">
@@ -340,10 +340,10 @@ body.cab #cabFrame{opacity:1}
     <span class="sw est"></span><span>Profondeur estimée</span>
   </div>
   <div class="seg" id="seg" role="group" aria-label="Navigation">
-    <button class="btn" id="modeFly" aria-pressed="true">Vol libre</button>
-    <button class="btn" id="modeOrbit" aria-pressed="false">Tourner autour d’un point</button>
+    <button class="btn" id="modeOrbit" aria-pressed="true">Carte</button>
+    <button class="btn" id="modeFly" aria-pressed="false">Vol libre</button>
   </div>
-  <dl class="help" id="helpFly">
+  <dl class="help" id="helpFly" hidden>
     <dt>Glisser</dt><dd>regarder autour de soi</dd>
     <dt>ZQSD · flèches</dt><dd>avancer là où vous regardez</dd>
     <dt>R / F</dt><dd>monter et descendre</dd>
@@ -358,11 +358,11 @@ body.cab #cabFrame{opacity:1}
     <dt>Deux doigts</dt><dd>pivoter et incliner (passez sous la rue pour voir les tunnels)</dd>
     <dt>Toucher</dt><dd>un train pour le suivre, une station pour ses infos</dd>
   </dl>
-  <dl class="help" id="helpOrbit" hidden>
-    <dt>Clic</dt><dd>sur une station ou un tunnel pour centrer la vue dessus</dd>
-    <dt>Glisser</dt><dd>tourner autour du point</dd>
-    <dt>Clic droit glissé</dt><dd>se déplacer sur la carte</dd>
-    <dt>Molette</dt><dd>zoomer vers le pointeur</dd>
+  <dl class="help" id="helpOrbit">
+    <dt>Glisser</dt><dd>se déplacer sur la carte</dd>
+    <dt>Molette · pincer</dt><dd>zoomer vers le pointeur</dd>
+    <dt>Clic droit glissé</dt><dd>pivoter et incliner, ou Maj + glisser (passez sous la rue pour voir les tunnels)</dd>
+    <dt>Clic</dt><dd>sur un train pour le suivre, sur une station pour ses infos</dd>
   </dl>
   <p class="note">Tracés et emplacements des stations : données ouvertes d’Île-de-France Mobilités (data.gouv.fr), projetées au mètre près. Tunnels et quais reprennent les dimensions réelles de chaque type de ligne. 23 profondeurs proviennent de chiffres publiés ; les autres sont estimées. À chaque croisement, l’ordre des lignes (laquelle passe dessus) suit Wikipédia ou OpenStreetMap quand l’une des deux le précise ; sinon il est déduit et signalé comme non vérifié (bouton « Croisements »). Toutes les profondeurs sont ensuite calculées d’un seul tenant, avec des pentes réalistes, pour qu’aucun tunnel ni aucune salle de station n’en traverse un autre. Les profondeurs sont mesurées depuis la rue, d’où une surface représentée à plat. Tout est à l’échelle 1:1. Les couloirs et escaliers ne figurent pas : aucune donnée publique ne les décrit.</p>
 </aside>
@@ -409,6 +409,11 @@ controls.minDistance=8; controls.maxDistance=30000;
 const TOUCH=matchMedia('(pointer: coarse)').matches;
 // phones: drag pans the map, pinch zooms, two fingers rotate/tilt (like Google Maps)
 controls.touches = TOUCH ? {ONE:-1, TWO:THREE.TOUCH.DOLLY_ROTATE} : {ONE:THREE.TOUCH.ROTATE, TWO:THREE.TOUCH.DOLLY_PAN};   // one-finger pan is our own grab-pan below
+// mouse, same map feel: drag pans (grab-pan below), right-drag or Maj/Ctrl/⌘ + drag rotates and tilts, wheel or trackpad pinch zooms
+controls.mouseButtons = {LEFT:-1, MIDDLE:THREE.MOUSE.DOLLY, RIGHT:THREE.MOUSE.ROTATE};
+const dragMods=e=>e.shiftKey||e.ctrlKey||e.metaKey;
+// runs before OrbitControls sees the press: with a modifier held, OrbitControls turns PAN into ROTATE
+addEventListener('pointerdown',e=>{ if(e.target===canvas && e.pointerType!=='touch') controls.mouseButtons.LEFT = dragMods(e) ? THREE.MOUSE.PAN : -1; },true);
 
 scene.add(new THREE.HemisphereLight(0xdfe8ff,0x1a1f2b,1.1));
 const sun=new THREE.DirectionalLight(0xffffff,1.3); sun.position.set(-2000,3000,1500); scene.add(sun);
@@ -663,7 +668,7 @@ function focusOn(p){
 camera.position.copy(HOME_T).add(homeOff()); controls.target.copy(HOME_T);
 controls.addEventListener('start',()=>{ anim=null; });
 
-// ---------- free flight (default) ----------
+// ---------- free flight ----------
 // Look by dragging, move with the stick / WASD, rise and sink with the buttons / R,F.
 // Speed scales with height so crossing the city and creeping along a platform both feel right.
 let MODE='fly';
@@ -1489,13 +1494,13 @@ function rayToPlane(cx,cy,out){
   return hit && hit.distanceTo(camera.position)<40000 ? hit : null;
 }
 canvas.addEventListener('pointerdown',e=>{
-  if(e.pointerType!=='touch') return; grab.touches.add(e.pointerId);
+  if(e.pointerType!=='touch' && (e.button!==0 || dragMods(e))) return; grab.touches.add(e.pointerId);
   if(MODE==='fly' || follow || grab.touches.size!==1){ grab.id=null; return; }
   anim=null;
   // grab at the depth of whatever is under the finger (a tunnel, a station), else at street level
   grab.plane.constant = -Math.min(0, controls.target.y);   // grab at the depth you're looking at (plane y = -constant)
   if(!rayToPlane(e.clientX,e.clientY,grab.p0)){ grab.plane.constant=0; if(!rayToPlane(e.clientX,e.clientY,grab.p0)){ grab.id=null; return; } }
-  grab.id=e.pointerId;
+  grab.id=e.pointerId; if(e.pointerType!=='touch') canvas.style.cursor='grabbing';
 });
 canvas.addEventListener('pointermove',e=>{
   if(e.pointerId!==grab.id || grab.touches.size!==1) return;
@@ -1503,7 +1508,8 @@ canvas.addEventListener('pointermove',e=>{
   _gp.subVectors(grab.p0,_gp); _gp.y=0;
   camera.position.add(_gp); controls.target.add(_gp); camera.updateMatrixWorld();
 });
-const grabEnd=e=>{ grab.touches.delete(e.pointerId); if(e.pointerId===grab.id || grab.touches.size!==1) grab.id=null; };
+const grabEnd=e=>{ if(e.pointerId===grab.id && e.pointerType!=='touch') canvas.style.cursor='grab';
+  grab.touches.delete(e.pointerId); if(e.pointerId===grab.id || grab.touches.size!==1) grab.id=null; };
 canvas.addEventListener('pointerup',grabEnd); canvas.addEventListener('pointercancel',grabEnd);
 
 // ---------- driver's cab view ----------
@@ -1733,8 +1739,8 @@ function setMode(m){
 }
 document.getElementById('modeFly').onclick=()=>setMode('fly');
 document.getElementById('modeOrbit').onclick=()=>setMode('orbit');
-setMode(TOUCH?'orbit':'fly');
-if(TOUCH){ controls.target.copy(HOME_T); camera.position.copy(HOME_T).add(homeOff()); controls.update(); }
+setMode('orbit');
+controls.target.copy(HOME_T); camera.position.copy(HOME_T).add(homeOff()); controls.update();
 
 // Resolution follows the device: drop pixel ratio a notch when frames run long, raise it back when there's headroom.
 const DPR_MAX=Math.min(devicePixelRatio, TOUCH?2:2); let dpr=Math.min(DPR_MAX, TOUCH?1.5:2), ft=[], lastAdapt=0, lastFrame=0;
