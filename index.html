@@ -320,7 +320,6 @@ body.cab #cabFrame{opacity:1}
   <div>
     <div class="label"><span>RER</span><button id="allR">Tout / rien</button></div>
     <div class="chips" id="chipsR"></div>
-    <p class="note" style="margin-top:6px">Le RER ne figure pas dans le flux en temps réel global : ses tunnels n’affichent donc pas encore de trains.</p>
   </div>
   <div class="btns">
     <button class="btn" id="xray" aria-pressed="true">Transparence</button>
@@ -1075,7 +1074,7 @@ const QMAP = {"qst":{"22396":[164],"463220":[164],"22127":[253,386],"22095":[319
 let lastRaw=null;
 const LIVE_NAMES=['Paris metro relay','Paris Metro Live'], LIVE_TOOL='live_trains', PUBLIC_LIVE='https://paris-metro-relay.gkpo.workers.dev/live';
 let LIVE_SERVER=LIVE_NAMES[0];
-const NO_LIVE=new Set(['A','B','C','D','E']);     // not in the network-wide live feed
+const NO_LIVE=new Set();     // lines missing from the network-wide live feed (none since the relay reads RER platform assignments)
 const LEFT_RUNNING=new Set(['C','D','E']);             // SNCF-run lines drive on the left
 const NCARS=id=>({'1':6,'4':6,'3bis':3,'7bis':3,'14':8}[id] || (isRER(id)?10:5));
 const CARDIM=id=> isRER(id)? {len:22, w:2.9, h:4.3} : (id==='14'? {len:14.6,w:2.45,h:3.5} : {len:14.6,w:2.4,h:3.48});
@@ -1299,12 +1298,13 @@ function ingest(p){
   // chains a single train could actually run (increasing times, plausible speed, nearby stops).
   const split=t=>{
     const cs=[...t.c].sort((a,b)=>a[1]-b[1]), chains=[];
+    const maxD=isRER(t.l)?12000:4000, maxV=isRER(t.l)?40:22;   // RER stops sit further apart and trains run up to ~140 km/h
     for(const c of cs){ const pc=QMAP.qpos[c[0]];
       let best=null;
       for(const ch of chains){ const l=ch[ch.length-1], pl=QMAP.qpos[l[0]]; if(!pc||!pl) continue;
         const gap=c[1]-Math.max(l[1],l[2]), d=Math.hypot(pc[0]-pl[0],pc[1]-pl[1]);
         const dp=t.dq&&QMAP.qpos[t.dq], fwdOK=!dp || Math.hypot(pc[0]-dp[0],pc[1]-dp[1]) < Math.hypot(pl[0]-dp[0],pl[1]-dp[1])+150;
-        if(gap>=12 && d<=4000 && d/gap<=22 && gap<=d/5+150 && fwdOK && (!best || l[1]>best[best.length-1][1])) best=ch; }
+        if(gap>=12 && d<=maxD && d/gap<=maxV && gap<=d/5+150 && fwdOK && (!best || l[1]>best[best.length-1][1])) best=ch; }
       if(best) best.push(c); else chains.push([c]); }
     return chains.map((c,k)=>({...t, j:t.j+'#'+k, c}));
   };
