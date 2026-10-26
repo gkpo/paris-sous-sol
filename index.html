@@ -1355,8 +1355,16 @@ liveBtn.onclick=async()=>{ if(!mcpNS) return; liveBtn.disabled=true;
   try{ mcpNS = window.claude && window.claude.use ? await window.claude.use('mcp') : null; } catch{ mcpNS=null; }
   if(!mcpNS){   // outside claude.ai: read the relay's public feed directly
     setLive('wait','Connexion au flux en direct…');
-    const pull=async()=>{ try{ const r=await fetch(PUBLIC_LIVE,{cache:'no-store'}); if(!r.ok) throw {code:'upstream_error'}; const j=await r.json(); if(j.error) throw {code:'upstream_error'}; ingest(j); } catch(e){ onLiveError(e&&e.code?e:{code:'server_unavailable'}); } };
-    pull(); setInterval(()=>{ if(!document.hidden) pull(); },90000);
+    // The relay can stall or 503 when its cache is cold, so each pull gives up after 12 s and
+    // failures retry soon (3 s, 6 s, 12 s… up to a minute) instead of waiting for the next 90 s round.
+    let pulling=false, fails=0, nextPull=null;
+    const schedule=ms=>{ clearTimeout(nextPull); nextPull=setTimeout(()=>{ if(document.hidden) schedule(5000); else pull(); },ms); };
+    const pull=async()=>{ if(pulling) return; pulling=true;
+      try{ const r=await fetch(PUBLIC_LIVE,{cache:'no-store',signal:AbortSignal.timeout(12000)}); if(!r.ok) throw {code:'upstream_error'}; const j=await r.json(); if(j.error) throw {code:'upstream_error'}; ingest(j); fails=0; schedule(90000); }
+      // timeouts and network errors are DOMExceptions with numeric codes, not our {code:'…'} objects
+      catch(e){ onLiveError(typeof e?.code==='string'?e:{code:'server_unavailable'}); fails++; schedule(Math.min(60000,3000*2**(fails-1))); }
+      finally{ pulling=false; } };
+    pull();
     document.addEventListener('visibilitychange',()=>{ if(!document.hidden && Date.now()-lastFeed>90000) pull(); });
     return; }
   setLive('wait','Connexion au flux en direct…');
