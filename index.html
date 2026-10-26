@@ -1512,6 +1512,21 @@ const grabEnd=e=>{ if(e.pointerId===grab.id && e.pointerType!=='touch') canvas.s
   grab.touches.delete(e.pointerId); if(e.pointerId===grab.id || grab.touches.size!==1) grab.id=null; };
 canvas.addEventListener('pointerup',grabEnd); canvas.addEventListener('pointercancel',grabEnd);
 
+// ---------- wheel zooms toward the pointer: the point under the cursor stays under it ----------
+// (OrbitControls in this three.js version only zooms toward the centre; this runs first and takes over)
+const _wp=new THREE.Vector3();
+addEventListener('wheel',e=>{
+  if(e.target!==canvas || MODE==='fly' || follow || cab) return;
+  e.preventDefault(); e.stopPropagation(); anim=null;
+  grab.plane.constant = -Math.min(0, controls.target.y);
+  if(!rayToPlane(e.clientX,e.clientY,_wp)){ grab.plane.constant=0; if(!rayToPlane(e.clientX,e.clientY,_wp)) _wp.copy(controls.target); }
+  const dy=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?400:1)*(e.ctrlKey?6:1);   // ctrlKey: trackpad pinch, which sends small deltas
+  const d=camera.position.distanceTo(controls.target);
+  const nd=Math.max(controls.minDistance,Math.min(controls.maxDistance,d*Math.exp(dy*0.0025))), k=nd/d;
+  camera.position.sub(_wp).multiplyScalar(k).add(_wp); controls.target.sub(_wp).multiplyScalar(k).add(_wp);
+  camera.updateMatrixWorld();
+},{capture:true,passive:false});
+
 // ---------- driver's cab view ----------
 // Track, platforms and people are built only for the line you're riding, when you enter the cab.
 const trackGroup=new THREE.Group(); trackGroup.visible=false; scene.add(trackGroup);
