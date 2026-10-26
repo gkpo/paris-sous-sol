@@ -1360,7 +1360,9 @@ liveBtn.onclick=async()=>{ if(!mcpNS) return; liveBtn.disabled=true;
     let pulling=false, fails=0, nextPull=null;
     const schedule=ms=>{ clearTimeout(nextPull); nextPull=setTimeout(()=>{ if(document.hidden) schedule(5000); else pull(); },ms); };
     const pull=async()=>{ if(pulling) return; pulling=true;
-      try{ const r=await fetch(PUBLIC_LIVE,{cache:'no-store',signal:AbortSignal.timeout(12000)}); if(!r.ok) throw {code:'upstream_error'}; const j=await r.json(); if(j.error) throw {code:'upstream_error'}; ingest(j); fails=0; schedule(90000); }
+      // a fresh URL each time: Chrome can park every request for the same URL behind one stuck request
+      // (the relay ignores the query and serves its shared cache)
+      try{ const r=await fetch(PUBLIC_LIVE+'?t='+Date.now(),{cache:'no-store',signal:AbortSignal.timeout(12000)}); if(!r.ok) throw {code:'upstream_error'}; const j=await r.json(); if(j.error) throw {code:'upstream_error'}; ingest(j); fails=0; schedule(90000); }
       // timeouts and network errors are DOMExceptions with numeric codes, not our {code:'…'} objects
       catch(e){ onLiveError(typeof e?.code==='string'?e:{code:'server_unavailable'}); fails++; schedule(Math.min(60000,3000*2**(fails-1))); }
       finally{ pulling=false; } };
